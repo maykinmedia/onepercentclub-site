@@ -478,6 +478,16 @@ def adjust_anonymous_current_order(sender, request, user, **kwargs):
                     # Close old order by this user.
                     user_current_order.status = OrderStatuses.closed
                     user_current_order.save()
+
+                    # Cancel the payments on the closed order.
+                    if user_current_order.payments.count() > 0:
+                        for payment in anon_current_order.payments.all():
+                            if payment.status != PaymentStatuses.new:
+                                try:
+                                    payments.cancel_payment(payment)
+                                except(NotImplementedError, PaymentException) as e:
+                                    logger.warn("Problem cancelling payment on closed user Order {0}: {1}".format(
+                                        user_current_order.id, e))
                 except Order.DoesNotExist:
                     # There isn't a current order for the so we don't need to cancel it.
                     pass
