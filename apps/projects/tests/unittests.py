@@ -7,7 +7,7 @@ from django.test import TestCase, RequestFactory
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from rest_framework import status
-from apps.bluebottle_utils.tests import UserTestsMixin, generate_random_slug
+from bluebottle.bluebottle_utils.tests import UserTestsMixin, generate_random_slug
 from apps.organizations.tests import OrganizationTestsMixin
 from apps.wallposts.models import TextWallPost
 import json

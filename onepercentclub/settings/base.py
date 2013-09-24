@@ -147,7 +147,7 @@ TEMPLATE_LOADERS = [
 # http://stackoverflow.com/questions/8092695/404-on-requests-without-trailing-slash-to-i18n-urls
 MIDDLEWARE_CLASSES = [
     # Have a middleware to make sure old cookies still work after we switch to domain-wide cookies.
-    'apps.bluebottle_utils.middleware.SubDomainSessionMiddleware',
+    'bluebottle.bluebottle_utils.middleware.SubDomainSessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -173,10 +173,10 @@ TEMPLATE_CONTEXT_PROCESSORS = global_settings.TEMPLATE_CONTEXT_PROCESSORS + (
     'django.core.context_processors.i18n'
 )
 
-ROOT_URLCONF = 'bluebottle.urls'
+ROOT_URLCONF = 'onepercentclub.urls'
 
 # Python dotted path to the WSGI application used by Django's runserver.
-WSGI_APPLICATION = 'bluebottle.wsgi.application'
+WSGI_APPLICATION = 'onepercentclub.wsgi.application'
 
 TEMPLATE_DIRS = (
     # Put strings here, like "/home/html/django_templates".
@@ -231,15 +231,15 @@ INSTALLED_APPS = (
     # bluebottle apps
     'apps.blogs',
     'apps.bluebottle_dashboard',
-    'apps.bluebottle_utils',
+    'bluebottle.bluebottle_utils',
     'apps.contentplugins',
-    'apps.accounts',
+    'bluebottle.accounts',
     'apps.love',
     'apps.organizations',
     'apps.projects',
     'apps.fund',
     'apps.recurring_donations',
-    'apps.geo',
+    'bluebottle.geo',
     'apps.hbtemplates',
     'apps.wallposts',
     'apps.payouts',
@@ -444,7 +444,7 @@ FLUENT_DASHBOARD_APP_GROUPS = (
         'models': (
             'django.contrib.auth.*',
             'django.contrib.sites.*',
-            'apps.accounts.*',
+            'bluebottle.accounts.*',
         ),
         'module': 'fluent_dashboard.modules.AppIconList',
         'collapsible': False,
@@ -560,3 +560,6 @@ STATICI18N_ROOT = os.path.join(PROJECT_ROOT, 'static', 'global')
 
 SESSION_COOKIE_NAME = 'bb-session-id'
 
+#
+# BlueBottle
+#
