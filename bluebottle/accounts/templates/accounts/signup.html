@@ -1,0 +1,146 @@
+{% load templatetag_handlebars i18n static %}
+{# put the signup template contents in logical blocks, easy to override/extend for custom projects #}
+
+    
+    {% block signup_wrapper %}
+        {% tplhandlebars "signup" %}
+        {% block signup_container %}
+            
+            <div class="container">
+                <div class="wrapper">
+                    {% verbatim %}
+                    {{partial signup_content}}
+                    {{partial signup_sidebar}}
+                    {% endverbatim %}
+                </div>
+            </div>
+
+        {% endblock signup_container %}
+        {% endtplhandlebars %}
+    {% endblock signup_wrapper %}
+
+
+
+    {% block signup_content_wrapper %}
+        {% tplhandlebars "_signup_content" %}
+        {% block signup_content %}
+            
+            <div class="content" id="signup">
+
+                <h1>{% trans "Join &lt;BlueBottle-project-name&gt;" %}</h1>
+                <p>
+                    {% block site_description %}
+                    {% blocktrans %}We do good stuff.{% endblocktrans %}
+                    {% endblock site_description %}
+                </p>
+                    
+{% verbatim %}  {{#if isUserCreated}}  {% endverbatim %}
+                    <h1>{% trans "Thanks for signing up!" %}</h1>
+                    <p>{% trans "We've sent you an email. Please click <strong>Activate Profile</strong> in the email we just sent you." %}</p>
+{% verbatim %}  {{else}}  {% endverbatim %}
+                    <form class="signup-form">
+                        <fieldset>
+                            <div class="control-group">
+                                <label class="control-label">
+                                    {% trans "Name" %}
+                                </label>
+                
+                                <div class="controls">
+                                    
+                                    {% verbatim %}{{view Em.TextField valueBinding="first_name"{% endverbatim %}
+                                    placeholder="{% trans "First name" %}"
+                                    {% verbatim %}class="inline-prepend" classBinding="errors.first_name.length:error"}}{% endverbatim %}
+                
+                                    {% verbatim %}{{view Em.TextField valueBinding="last_name"{% endverbatim %}
+                                    placeholder="Surname" 
+                                    {% verbatim %}class="inline-append" classBinding="errors.last_name.length:error"}}{% endverbatim %}
+                                </div>
+                            </div>
+                
+                            <div class="control-group">
+                                <label class="control-label">
+                                    {% trans "Email" %}
+                                </label>
+                
+                                <div class="controls">
+                                    {% verbatim %}
+                                    {{view Em.TextField valueBinding="email" type="email" classBinding="errors.email.length:error"}}{% endverbatim %}
+                                </div>
+                
+                                {% verbatim %}
+                                {{#if errors.email}}
+                                    <div class="errors">{{#each errors.email}}<p>{{this}}</p>{{/each}}</div>
+                                {{/if}}
+                                {% endverbatim %}
+                            </div>
+                
+                            <div class="control-group">
+                                <label class="control-label">
+                                    {% trans "Password" %}
+                                </label>
+                
+                                <div class="controls">
+                                    {% verbatim %}
+                                    {{view Em.TextField valueBinding="password" type="password" classBinding="errors.password.length:error"}}
+                                    {% endverbatim %}
+                                </div>
+                
+                                {% verbatim %}
+                                {{#if errors.password}}
+                                    <div class="errors">{{#each errors.password}}<p>{{this}}</p>{{/each}}</div>
+                                {{/if}}
+                                {% endverbatim %}
+                            </div>
+                        </fieldset>
+                        
+                        <div class="user-agree">
+                            {% block user_agreement %}
+                                
+                                {# {% blocktrans with "" as ember_action %}   #}
+                                By joining 1%Club I hereby agree to the 
+                                <a {% verbatim %}{{action showPage 'terms-and-conditions'}}{% endverbatim %} href="/#!/pages/terms-and-conditions">1%Club Terms of service</a>
+                                {# {% endblocktrans %} #}
+
+                            {% endblock user_agreement %}
+                       </div>
+                       
+                        <button class="btn btn-iconed btn-primary" {% verbatim %}{{action 'createUser' model}}>{% endverbatim %}
+                            <em class="flaticon solid user-1"></em>
+                            {% trans "Sign up" %}
+                        </button>
+                    </form>
+                {% verbatim %}{{/if}}{% endverbatim %}
+            </div>
+
+        {% endblock signup_content %}
+        {% endtplhandlebars %}
+    {% endblock signup_content_wrapper %}
+
+
+
+
+    {% tplhandlebars "_signup_sidebar" %}
+
+    <div class="sidebar tip" id="members">
+
+        <div class="login-link">
+            <a {{action openInBox "login"}} class="highlight">
+                <em class="flaticon solid unlock-3"></em>
+                <strong>{%  trans "Already have an account?" %}</strong>
+                <em>{% trans "Log in here, fast & easy" %}</em>
+            </a>
+        </div>
+
+        <div class="members-advantage">
+        
+            <em class="flaticon solid heart-1"></em>
+            
+            <h3>{% blocktrans %}Why join 1%Club?{% endblocktrans %}</h3>
+            <ol>
+                <li>{% trans "It's easy to find projects you like." %}</li>
+                <li>{% blocktrans %}A fun and personal way to share your 1%.{% endblocktrans %}</li>
+                <li>{% trans "You'll receive updates on the progress of the projects you support." %}</li>
+            </ol>
+        </div>
+    </div>
+    {% endtplhandlebars %}
