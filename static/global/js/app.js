@@ -1,3 +1,4 @@
+// TODO: move to a separate js lib file, this pollutes the app
 function getCookie(name) {
     var cookieValue = null;
     if (document.cookie && document.cookie != '') {
@@ -14,13 +15,16 @@ function getCookie(name) {
     return cookieValue;
 }
 
+// TODO: move to a separate js lib file, this pollutes the app
 var csrf_token = getCookie('csrftoken');
 
+// TODO: move to a separate js lib file, this pollutes the app
 function csrfSafeMethod(method) {
     // these HTTP methods do not require CSRF protection
     return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
 }
 
+// TODO: move to a separate js lib file, this pollutes the app
 function sameOrigin(url) {
     // If url starts with / it's relative and same origin
     if (url.substr(0, 1) == '/') {
@@ -38,6 +42,7 @@ function sameOrigin(url) {
     // or any other URL that isn't scheme relative or absolute i.e relative. !(/^(\/\/|http:|https:).*/.test(url));
 }
 
+// TODO: move to a separate js lib file, this pollutes the app
 $.ajaxSetup({
     beforeSend: function(xhr, settings) {
         if (!csrfSafeMethod(settings.type) && sameOrigin(settings.url)) {
@@ -50,7 +55,7 @@ $.ajaxSetup({
 });
 
 
-// Create a mock 'File' class so things won't break to awfully in IE8&9
+// Create a mock 'File' class so things won't break too awfully in IE8&9
 // FIXME: Use a polyfill for this!!
 // https://github.com/francois2metz/html5-formdata
 if (Em.isNone(File)) {
@@ -63,7 +68,6 @@ Em.TextField.reopen({
 });
 
 
-// TODO Rename App to BlueBottle, BB or BBApp.
 App = Em.Application.create({
     VERSION: '1.0.0',
 
@@ -515,18 +519,8 @@ App.Router.map(function() {
 
     this.resource('taskList', {path: '/tasks'});
 
+    // users/accounts routing, moved to static files in the accounts app
     accounts_router.call(this);
-
-    // this.resource('signup');
-
-    // this.resource('user', {path: '/member'}, function() {
-    //     this.resource('userProfile', {path: '/profile/'});
-    //     this.resource('userSettings', {path: '/settings'});
-    //     this.resource('userOrders', {path: '/orders'});
-    // });
-
-    // this.route('userActivate', {path: '/activate/:activation_key'});
-    // this.resource('passwordReset', {path: '/passwordreset/:reset_token'});
 
     this.resource('myProject', {path: '/my/projects/:my_project_id'}, function() {
         this.resource('myProjectPlan', {path: 'plan'}, function() {
@@ -729,7 +723,6 @@ App.ApplicationRoute = Em.Route.extend({
         return "/nice/stuff"
     }
 });
-
 
 /**
  * Project Routes
@@ -1255,13 +1248,7 @@ App.VoucherRedeemRoute = Em.Route.extend({
 });
 
 
-App.UserIndexRoute = Em.Route.extend({
-    beforeModel: function() {
-        this.transitionTo('userProfile');
-    }
-});
-
-
+// donations related
 // TODO Delete this Route when we implement Order history.
 App.UserRoute = Em.Route.extend({
     setupController: function(controller, model) {
@@ -1272,7 +1259,6 @@ App.UserRoute = Em.Route.extend({
         });
     }
 });
-
 
 /**
  * My Projects
