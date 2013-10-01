@@ -232,7 +232,7 @@ INSTALLED_APPS = (
     # bluebottle apps
     'bluebottle.accounts',
     # 'app' without models to hold the site-wide bluebottle templates (base.html for example)
-    'bluebottle.bluebottle',
+    'bluebottle.common',
 
     'apps.blogs',
     'apps.bluebottle_dashboard',
