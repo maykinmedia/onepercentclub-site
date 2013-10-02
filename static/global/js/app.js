@@ -197,6 +197,10 @@ App = Em.Application.create({
 });
 
 /*
+
+For now we included all hbs templates in index.html.
+
+
 // Now halt the App because we first want to load all templates
 App.deferReadiness();
 
@@ -579,10 +583,9 @@ App.ApplicationRoute = Em.Route.extend({
     },
 
 
-    events: {
+    actions: {
         selectLanguage: function(language) {
             var user = App.CurrentUser.find('current');
-            var transaction = this.get('store').transaction();
             if (!user.get('id_for_ember')) {
                 if (language == App.get('language')) {
                     // Language already set. Don't do anything;
@@ -597,8 +600,8 @@ App.ApplicationRoute = Em.Route.extend({
                     return true;
                 }
 
-                if (settings.get('id')) {
-                    transaction.add(settings);
+				if (settings.get('id')) {
+                    settings.save();
                 }
                 var languages = App.get('interfaceLanguages');
                 for (i in languages) {
@@ -610,7 +613,7 @@ App.ApplicationRoute = Em.Route.extend({
                         settings.on('didUpdate', function(){
                             document.location = '/' + language + document.location.hash;
                         });
-                        transaction.commit();
+                        settings.save();
                         return true;
                     }
                 }
@@ -622,7 +625,7 @@ App.ApplicationRoute = Em.Route.extend({
                 settings.on('didUpdate', function(){
                     document.location = '/' + language + document.location.hash;
                 });
-                transaction.commit();
+                settings.save();
                 return true;
             });
             return true;
@@ -707,11 +710,11 @@ App.ApplicationRoute = Em.Route.extend({
         addDonation: function (project) {
             var route = this;
             App.CurrentOrder.find('current').then(function(order) {
-                var transaction = route.get('store').transaction();
-                var donation = transaction.createRecord(App.CurrentOrderDonation);
+                var store = route.get('store');
+                var donation = store.createRecord(App.CurrentOrderDonation);
                 donation.set('project', project);
                 donation.set('order', order);
-                transaction.commit();
+                donation.save();
                 route.transitionTo('currentOrder.donationList');
             });
         }
@@ -808,14 +811,12 @@ App.ProjectTaskRoute = Em.Route.extend({
         wallPostController.set('items', Em.A());
         wallPostController.set('page', 0);
     },
-    events: {
+    actions: {
         applyForTask: function(task) {
             var route = this;
-            var transaction = route.get('store').transaction();
-            var taskMember = transaction.createRecord(App.TaskMember);
+            var store = route.get('store');
+            var taskMember = store.createRecord(App.TaskMember);
             var view = App.TaskMemberApplyView.create();
-            //view.set('model', taskMember);
-            transaction.add(taskMember);
 
 
             Bootstrap.ModalPane.popup({
@@ -829,7 +830,7 @@ App.ProjectTaskRoute = Em.Route.extend({
                         taskMember.set('task', task);
                         taskMember.set('motivation', view.get('motivation'));
                         taskMember.set('created', new Date());
-                        transaction.commit();
+                        taskMember.save();
                     }
                 }
             });
@@ -839,8 +840,8 @@ App.ProjectTaskRoute = Em.Route.extend({
             var controller = this.controllerFor('taskFileNew');
             var view = App.TaskFileNewView.create();
             view.set('controller', controller);
-            var transaction = route.get('store').transaction();
-            var file = transaction.createRecord(App.TaskFile);
+            var store = route.get('store');
+            var file = store.createRecord(App.TaskFile);
             controller.set('model', file);
             file.set('task', task);
 
@@ -858,10 +859,10 @@ App.ProjectTaskRoute = Em.Route.extend({
                 callback: function(opts, e) {
                     e.preventDefault();
                     if (opts.primary) {
-                        transaction.commit();
+                        file.save();
                     }
                     if (opts.secondary) {
-                        transaction.rollback();
+                        file.deleteRecord();
                     }
                 }
             });
@@ -888,8 +889,6 @@ App.ProjectTaskRoute = Em.Route.extend({
             controller.set('model', taskMember);
             var view = App.TaskMemberEdit.create();
             view.set('controller', controller);
-            var transaction = route.get('store').transaction();
-            transaction.add(taskMember);
 
             Bootstrap.ModalPane.popup({
                 headerViewClass: Ember.View.extend({
@@ -904,10 +903,10 @@ App.ProjectTaskRoute = Em.Route.extend({
                 callback: function(opts, e) {
                     e.preventDefault();
                     if (opts.primary) {
-                        transaction.commit();
+                        taskMember.save();
                     }
                     if (opts.secondary) {
-                        transaction.rollback();
+                        taskMember.rollback();
                     }
                 }
             });
@@ -923,8 +922,8 @@ App.ProjectTaskNewRoute = Em.Route.extend({
 
     setupController: function(controller, model) {
         this._super(controller, model);
-        var transaction = this.get('store').transaction();
-        model = transaction.createRecord(App.Task);
+        var store = this.get('store');
+        var model = store.createRecord(App.Task);
         controller.set('content', model);
     }
 });
@@ -933,15 +932,6 @@ App.ProjectTaskNewRoute = Em.Route.extend({
 App.ProjectTaskEditRoute = Em.Route.extend({
     model: function(params) {
         return App.Task.find(params.task_id);
-    },
-
-    setupController: function(controller, model) {
-        this._super(controller, model);
-        // Only start a new transaction if this model hasn't got its own yet.
-        if (model.transaction.isDefault) {
-            var transaction = this.get('store').transaction();
-            transaction.add(model);
-        }
     }
 });
 
@@ -1159,13 +1149,12 @@ App.RecurringDirectDebitPaymentRoute = Em.Route.extend({
     model: function() {
         var route = this;
         return App.RecurringDirectDebitPayment.find({}).then(function(recordList) {
-                var transaction = route.get('store').transaction();
+                var store = route.get('store');
                 if (recordList.get('length') > 0) {
                     var record = recordList.objectAt(0);
-                    transaction.add(record);
                     return record;
                 } else {
-                    return transaction.createRecord(App.RecurringDirectDebitPayment);
+                    return store.createRecord(App.RecurringDirectDebitPayment);
                 }
             }
         )
@@ -1213,14 +1202,14 @@ App.VoucherRedeemAddRoute = Em.Route.extend({
         }
     },
 
-    events: {
+    actions: {
         addDonation: function (voucher, project) {
             if (!Em.isNone(project)) {
-                var transaction = this.get('store').transaction();
+                var store = this.get('store');
                 App.VoucherDonation.reopen({
                     url: 'fund/vouchers/' + voucher.get('code') + '/donations'
                 });
-                var donation = transaction.createRecord(App.VoucherDonation);
+                var donation = store.createRecord(App.VoucherDonation);
                 donation.set('project', project);
                 donation.set('voucher', voucher);
                 // Ember object embedded isn't updated by server response. Manual update for embedded donation here.
@@ -1228,7 +1217,7 @@ App.VoucherRedeemAddRoute = Em.Route.extend({
                     voucher.get('donations').clear();
                     voucher.get('donations').pushObject(record);
                 });
-                transaction.commit();
+                donation.save();
                 $.colorbox.close();
             }
         }
@@ -1237,14 +1226,14 @@ App.VoucherRedeemAddRoute = Em.Route.extend({
 
 App.VoucherRedeemRoute = Em.Route.extend({
 
-    events: {
+    actions: {
         addDonation: function (voucher, project) {
             if (!Em.isNone(project)) {
-                var transaction = this.get('store').transaction();
+                var store = this.get('store');
                 App.VoucherDonation.reopen({
                     url: 'fund/vouchers/' + voucher.get('code') + '/donations'
                 });
-                var donation = transaction.createRecord(App.VoucherDonation);
+                var donation = store.createRecord(App.VoucherDonation);
                 donation.set('project', project);
                 donation.set('voucher', voucher);
                 // Ember object embedded isn't updated by server response. Manual update for embedded donation here.
@@ -1252,7 +1241,7 @@ App.VoucherRedeemRoute = Em.Route.extend({
                     voucher.get('donations').clear();
                     voucher.get('donations').pushObject(record);
                 });
-                transaction.commit();
+                donation.save();
                 $.colorbox.close();
             }
         }
@@ -1290,8 +1279,8 @@ App.MyProjectListRoute = Em.Route.extend({
 
 App.MyPitchNewRoute = Em.Route.extend({
     model: function() {
-        var transaction = this.get('store').transaction();
-        return transaction.createRecord(App.MyProject);
+        var store = this.get('store');
+        return store.createRecord(App.MyProject);
     }
 });
 
@@ -1537,8 +1526,8 @@ App.NewsIndexRoute = Em.Route.extend({
 
 App.ContactMessageRoute = Em.Route.extend({
     model: function(params) {
-        var transaction = this.get('store').transaction();
-        return transaction.createRecord(App.ContactMessage);
+        var store = this.get('store');
+        return store.createRecord(App.ContactMessage);
     },
     setupController: function(controller, model) {
         window.scrollTo(0, 0);

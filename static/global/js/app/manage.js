@@ -369,7 +369,7 @@ App.MyPitchNewController = Em.ObjectController.extend(App.Editable, {
             controller.transitionToRoute('myProjectPitch', record);
         });
 
-        model.transaction.commit();
+        model.save();
     }
 });
 
@@ -394,9 +394,14 @@ App.MyProjectPitchController = Em.ObjectController.extend(App.Editable, {
 
 });
 
-App.MyProjectPitchBasicsController = Em.ObjectController.extend(App.Editable, {});
-App.MyProjectPitchLocationController = Em.ObjectController.extend(App.Editable, {});
+App.MyProjectPitchBasicsController = Em.ObjectController.extend(App.Editable, {
+    nextStep: 'myProjectPitch.location'
+});
+App.MyProjectPitchLocationController = Em.ObjectController.extend(App.Editable, {
+    nextStep: 'myProjectPitch.media'
+});
 App.MyProjectPitchMediaController = Em.ObjectController.extend(App.Editable, {
+    nextStep: 'myProjectPitch.submit',
 
     save: function(record) {
         this._super();
@@ -475,7 +480,7 @@ App.MyProjectPlanAmbassadorsController = Em.ObjectController.extend(App.Editable
     updateRecordOnServer: function(){
         var controller = this;
         var model = this.get('model');
-        model.transaction.commit();
+        model.save();
 
         if (model.get('validAmbassadors')) {
             controller.transitionToRoute(controller.get('nextStep'));
@@ -546,7 +551,7 @@ App.MyProjectPlanOrganisationController = Em.ObjectController.extend(App.Editabl
             window.scrollTo(0);
         });
 
-        model.transaction.commit();
+        model.save();
     },
 
     selectOrganization: function(org){
@@ -588,7 +593,7 @@ App.MyProjectPlanBankController = Em.ObjectController.extend(App.Editable, {
             window.scrollTo(0);
         });
 
-        model.transaction.commit();
+        model.save();
     },
 
     shouldSave: function(){
@@ -628,7 +633,7 @@ App.MyProjectPlanBudgetController = Em.ObjectController.extend(App.Editable, {
     updateRecordOnServer: function(){
         var controller = this;
         var model = this.get('model');
-        model.transaction.commit();
+        model.save();
         if (model.get('validBudget')) {
             controller.transitionToRoute(controller.get('nextStep'));
         }

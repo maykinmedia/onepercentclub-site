@@ -119,9 +119,11 @@ class Donation(models.Model):
         verbose_name_plural = _("donations")
 
     def __unicode__(self):
-        language = translation.get_language()
+        language = translation.get_language().split('-')[0]
+        if not language:
+            language = 'en'
         return u'{0} : {1} : {2}'.format(str(self.id), self.project.title,
-                                         format_currency(self.amount / 100, self.currency, locale=language))
+                                         format_currency(self.amount / 100.0, self.currency, locale=language))
 
 
 class OrderStatuses(DjangoChoices):
@@ -415,9 +417,9 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
         # TODO Implement vouchers.
 
     #
-    # Payment: -> failed or refunded
+    # Payment: -> failed, refunded or chargedback
     #
-    if new_status in [PaymentStatuses.failed, PaymentStatuses.refunded]:
+    if new_status in [PaymentStatuses.failed, PaymentStatuses.refunded, PaymentStatuses.chargedback]:
         if order.status != OrderStatuses.closed:
             order.status = OrderStatuses.closed
             order.save()

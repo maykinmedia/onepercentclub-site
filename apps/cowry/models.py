@@ -1,5 +1,4 @@
 from django.db import models
-from django.utils.text import Truncator
 from django.utils.translation import ugettext as _
 from django_extensions.db.fields import ModificationDateTimeField, CreationDateTimeField
 from djchoices import DjangoChoices, ChoiceItem
@@ -13,6 +12,7 @@ class PaymentStatuses(DjangoChoices):
     paid = ChoiceItem('paid', label=_("Paid"))
     failed = ChoiceItem('failed', label=_("Failed"))
     cancelled = ChoiceItem('cancelled', label=_("Cancelled"))
+    chargedback = ChoiceItem('chargedback', label=_("Chargedback"))
     refunded = ChoiceItem('refunded', label=_("Refunded"))
     unknown = ChoiceItem('unknown', label=_("Unknown"))  # Payments with this status have not been mapped.
 

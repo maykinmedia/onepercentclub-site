@@ -223,11 +223,15 @@ INSTALLED_APPS = (
     'tinymce',
     'social_auth',
     'statici18n',
+    'django.contrib.humanize',
 
     # Cowry Payments
     'apps.cowry',
     'apps.cowry_docdata',
     'apps.cowry_docdata_legacy',
+
+    # Password auth from old PHP site.
+    'legacyauth',
 
     # bluebottle apps
     'bluebottle.accounts',
@@ -395,9 +399,11 @@ FLUENT_TEXT_SANITIZE_HTML = True
 DJANGO_WYSIWYG_FLAVOR = 'tinymce_advanced'
 
 # Custom dashboard configuration
-ADMIN_TOOLS_INDEX_DASHBOARD = 'fluent_dashboard.dashboard.FluentIndexDashboard'
+# ADMIN_TOOLS_INDEX_DASHBOARD = 'fluent_dashboard.dashboard.FluentIndexDashboard'
+ADMIN_TOOLS_INDEX_DASHBOARD = 'dashboard.CustomIndexDashboard'
 ADMIN_TOOLS_APP_INDEX_DASHBOARD = 'fluent_dashboard.dashboard.FluentAppIndexDashboard'
 ADMIN_TOOLS_MENU = 'fluent_dashboard.menu.FluentMenu'
+
 
 # Further customize the dashboard
 FLUENT_DASHBOARD_DEFAULT_MODULE = 'admin_tools.dashboard.modules.AppList'
@@ -416,23 +422,25 @@ FLUENT_DASHBOARD_APP_GROUPS = (
     }),
     (_('Projects'), {
         'models': (
-            'apps.projects.models.Message',
-            'apps.projects.models.Project',
-            'apps.projects.models.ProjectPitch',
-            'apps.projects.models.ProjectPlan',
-            'apps.projects.models.Testimonial',
+            'apps.projects.models.*',
             'apps.organizations.*',
-            'apps.donations.*',
         ),
         'module': 'fluent_dashboard.modules.AppIconList',
         'collapsible': False,
     }),
-    (_('Funding'), {
+    (_('Donations'), {
         'models': (
             'apps.fund.*',
             'apps.vouchers.*',
-            'apps.payouts.models.BankMutation',
-            'apps.payouts.models.Payout',
+        ),
+        'module': 'fluent_dashboard.modules.AppIconList',
+        'collapsible': False,
+    }),
+    (_('Finances'), {
+        'models': (
+            'apps.payouts.*',
+            'apps.cowry_docdata.*',
+            'apps.cowry.*',
         ),
         'module': 'fluent_dashboard.modules.AppIconList',
         'collapsible': False,
@@ -444,11 +452,26 @@ FLUENT_DASHBOARD_APP_GROUPS = (
         'module': 'fluent_dashboard.modules.AppIconList',
         'collapsible': False,
     }),
-    (_('Administration'), {
+    (_('Members'), {
         'models': (
             'django.contrib.auth.*',
-            'django.contrib.sites.*',
+            'registration.*',
             'bluebottle.accounts.*',
+        ),
+        'module': 'fluent_dashboard.modules.AppIconList',
+        'collapsible': False,
+    }),
+    (_('Site settings'), {
+        'models': (
+            'django.contrib.sites.*',
+            'apps.redirects.*'
+        ),
+        'module': 'fluent_dashboard.modules.AppIconList',
+        'collapsible': False,
+    }),
+    (_('Wall Posts'), {
+        'models': (
+            'apps.wallposts.*',
         ),
         'module': 'fluent_dashboard.modules.AppIconList',
         'collapsible': False,
@@ -533,7 +556,7 @@ DATABASE_ROUTERS = [
 ]
 
 # E-mail settings
-DEFAULT_FROM_EMAIL = '<website@onepercentclub.com> Onepercentclub'
+DEFAULT_FROM_EMAIL = '<website@onepercentclub.com> 1%Club'
 
 
 # Django-registration settings
@@ -564,6 +587,10 @@ STATICI18N_ROOT = os.path.join(PROJECT_ROOT, 'static', 'global')
 
 SESSION_COOKIE_NAME = 'bb-session-id'
 
+# Support legacy passwords
+PASSWORD_HASHERS = global_settings.PASSWORD_HASHERS + (
+    'legacyauth.hashers.LegacyPasswordHasher',
+)
 #
 # BlueBottle
 #
