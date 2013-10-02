@@ -1,5 +1,8 @@
 -e git://github.com/onepercentclub/bluebottle.git#egg=bluebottle
 
+# Override the incorrect Django version resolved in BlueBottle.
+Django==1.5.4
+
 django-localflavor==1.0
 
 django_debug_toolbar
