@@ -1,11 +1,6 @@
 -e git://github.com/maykinmedia/bluebottle.git#egg=bluebottle
 
-Django==1.5.4
-Pillow==2.1.0
-
 django-localflavor==1.0
-
-django_extensions==1.1.1
 
 django_debug_toolbar
 
@@ -28,33 +23,17 @@ django_compressor==1.2
 # https://docs.djangoproject.com/en/1.4/topics/i18n/timezones/
 pytz
 
-sphinx # Sphinx documentation
-
-# http://pypi.python.org/pypi/sorl-thumbnail/11.12
-sorl-thumbnail==11.12
-
-# http://pypi.python.org/pypi/django-choices/
-django-choices==1.1.11
-
-# http://pypi.python.org/pypi/surlex/0.1.2
-surlex==0.1.2
-
 # http://pypi.python.org/pypi/South
 south==0.8.1
 
 # Django-REST-Framework
 django-filter==0.6
-djangorestframework==2.3.6
 
 # Jenkins integration
 django-jenkins==0.14.0
 
 # Coverage in tests
 coverage==3.6
-
-# Tagging
-django-taggit==0.10a1
-django-taggit-autocomplete-modified==0.1.0b4
 
 # Legacy authentication module for authenticating users from the old PHP site.
 https://github.com/onepercentclub/legacyauth/archive/3f2406c50dead25a748fb2433de55b73a9162f18.zip
@@ -85,9 +64,6 @@ django-admin-tools==0.5.1
 fabric
 gitpython
 
-# Transifex - for translations!
-transifex-client==0.9
-
 # Handlebars in templates
 django-templatetag-handlebars==1.2.0
 
@@ -110,14 +86,6 @@ django-social-auth==0.7.23
 # setup.py doesn't seem to be working properly so we're using a fixed version.
 # https://github.com/freelancersunion/django-salesforce/issues/4
 https://github.com/onepercentclub/django-salesforce/archive/1e54beb7bcc15a893e9590fb27cbf08853da5599.zip
-
-# There hasn't been a release of django-registration is a while and we need the 1.5 custom user support.
-# Official: https://bitbucket.org/ubernostrum/django-registration/
-# Fork with 1.5 Custom User support: https://bitbucket.org/eire1130/django-registration
-# Our fork of the fork with HTML_ACTIVATION_EMAIL option:
-# TODO Try to unwind this mess and contribute some stuff upstream.
-https://bitbucket.org/onepercentclub/django-registration/get/ae9e9ed265ed.zip
-
 
 # Private uploads
 https://bitbucket.org/wkornewald/django-filetransfers/get/32ddeac.zip
