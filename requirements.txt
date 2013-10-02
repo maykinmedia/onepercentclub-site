@@ -1,4 +1,4 @@
--e git://github.com/maykinmedia/bluebottle.git#egg=bluebottle
+-e git://github.com/onepercentclub/bluebottle.git#egg=bluebottle
 
 django-localflavor==1.0
 
