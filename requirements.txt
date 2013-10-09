@@ -21,7 +21,7 @@ django_compressor==1.2
 
 # pytz is "highly recommended" by the Django timezone documentation since
 # we're using Django timezone support
-# https://docs.djangoproject.com/en/1.4/topics/i18n/timezones/
+# https://docs.djangoproject.com/en/1.4sales/topics/i18n/timezones/
 pytz
 
 # http://pypi.python.org/pypi/South
@@ -89,6 +89,9 @@ django-social-auth==0.7.23
 # https://github.com/freelancersunion/django-salesforce/issues/4
 # https://github.com/onepercentclub/django-salesforce/archive/1e54beb7bcc15a893e9590fb27cbf08853da5599.zip
 -e git://github.com/onepercentclub/django-salesforce.git@1e54beb7bcc15a893e9590fb27cbf08853da5599#egg=django-salesforce
+
+# Django registration 1.0 has custom UserProfile support
+django-registration==1.0
 
 # Private uploads
 https://bitbucket.org/wkornewald/django-filetransfers/get/32ddeac.zip
