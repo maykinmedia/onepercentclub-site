@@ -25,6 +25,16 @@ App.Donation = DS.Model.extend({
 });
 
 
+App.Ticker = DS.Model.extend({
+    url: 'fund/latest-donations',
+    project: DS.belongsTo('App.ProjectPreview'),
+    user: DS.belongsTo('App.UserPreview'),
+    amount: DS.attr('number'),
+    created: DS.attr('date')
+});
+
+
+
 App.Voucher =  DS.Model.extend({
     url: 'fund/vouchers',
 
@@ -61,7 +71,6 @@ App.CurrentOrder = App.Order.extend({
 
 App.CurrentOrderDonation = App.Donation.extend({
     url: 'fund/orders/current/donations',
-
     order: DS.belongsTo('App.CurrentOrder')
 });
 
@@ -308,7 +317,6 @@ App.CurrentOrderDonationListController = Em.ArrayController.extend({
 
 App.CurrentOrderDonationController = Em.ObjectController.extend({
     needs: ['currentOrder', 'currentOrderDonationList'],
-
     updateDonation: function(newAmount) {
         var donation = this.get('model');
 
@@ -329,9 +337,11 @@ App.CurrentOrderDonationController = Em.ObjectController.extend({
             }, 10000);
         }
     },
-
     deleteDonation: function() {
         var donation = this.get('model');
+        // Fix because reverse relations aren't cleared.
+        // See: http://stackoverflow.com/questions/18806533/deleterecord-does-not-remove-record-from-hasmany
+        donation.get('order.donations').removeObject(donation);
         donation.deleteRecord();
         donation.save();
     }
@@ -689,6 +699,32 @@ App.RecurringOrderThanksController = Em.ObjectController.extend({
 });
 
 
+App.TickerController = Em.ArrayController.extend(Ember.SortableMixin, {
+
+    sortProperties: ['created'],
+    sortAscending: false,
+    init: function(){
+        this._super();
+        var controller = this;
+        window.setTimeout(function(){
+            controller.refresh();
+            console.log('reloading');
+        }, 5000);
+    },
+
+    refresh: function(){
+        var controller = this;
+        App.Ticker.find();
+        window.setTimeout(function(){
+            controller.refresh();
+            console.log('reloading');
+        }, 20000);
+
+    }
+
+
+});
+
 /*
  Views
  */
@@ -739,12 +775,13 @@ App.CurrentOrderDonationView = Em.View.extend({
     change: function(e) {
         this.get('controller').updateDonation(Em.get(e, 'target.value'));
     },
-
-    'delete': function(item) {
-        var controller = this.get('controller');
-        this.$().slideUp(500, function() {
-            controller.deleteDonation();
-        });
+    actions: {
+        deleteDonation: function(item) {
+            var controller = this.get('controller');
+            this.$().slideUp(500, function() {
+                controller.deleteDonation();
+            });
+        }
     }
 });
 
@@ -819,4 +856,13 @@ App.RecurringDirectDebitPaymentView = Em.View.extend({
 });
 
 
+App.TickerView = Em.View.extend({
+    // Remove header/footer for this view.
+    didInsertElement: function () {
+        this._super();
+        $('body').css('overflow', 'hidden');
+        $('#navigation').remove();
+        $('#footer').remove();
+    }
+});
 

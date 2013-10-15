@@ -207,7 +207,7 @@ INSTALLED_APPS = (
     'sorl.thumbnail',
     'taggit',
     'taggit_autocomplete_modified',
-    'micawber.contrib.mcdjango', # Embedding videos
+    'micawber.contrib.mcdjango',  # Embedding videos
     'templatetag_handlebars',
     'rest_framework',
     'polymorphic',
@@ -246,7 +246,8 @@ INSTALLED_APPS = (
     'apps.organizations',
     'apps.projects',
     'apps.fund',
-    'apps.recurring_donations',
+    'apps.donations',
+    'apps.vouchers',
     'bluebottle.geo',
     'apps.hbtemplates',
     'apps.wallposts',
@@ -522,10 +523,10 @@ FLUENT_DASHBOARD_APP_ICONS = {
 
     # Donations
     'fund/donation': 'icons/flaticons_stroke/SVGs/money-2.svg',
-    'fund/voucher': 'icons/flaticons_stroke/SVGs/gift-2.svg',
     'fund/order': 'icons/flaticons_stroke/SVGs/cart-1.svg',
     'fund/recurringdirectdebitpayment': 'icons/flaticons_stroke/SVGs/repeat-2.svg',
-    'fund/customvoucherrequest': 'icons/flaticons_stroke/SVGs/mail-2.svg',
+    'vouchers/voucher': 'icons/flaticons_stroke/SVGs/gift-2.svg',
+    'vouchers/customvoucherrequest': 'icons/flaticons_stroke/SVGs/mail-2.svg',
 
     # Tasks
     'tasks/task': 'icons/flaticons_stroke/SVGs/work-1.svg',
@@ -631,6 +632,8 @@ CRAWLABLE_PHANTOMJS_DEDICATED_MODE = True
 CRAWLABLE_PHANTOMJS_DEDICATED_PORT = 8910
 # If dedicated mode is disabled, you can specify arguments to start phantomjs.
 CRAWLABLE_PHANTOMJS_ARGS = []
+# Use HTTPS for PhantomJS requests.
+CRAWLABLE_FORCE_HTTPS = True
 
 # Send email to console by default
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

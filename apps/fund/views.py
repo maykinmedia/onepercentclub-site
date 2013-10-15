@@ -7,20 +7,17 @@ from apps.cowry.models import PaymentStatuses, Payment
 from apps.cowry.serializers import PaymentSerializer
 from apps.cowry_docdata.models import DocDataPaymentOrder
 from apps.cowry_docdata.serializers import DocDataOrderProfileSerializer
+from apps.fund.serializers import DonationInfoSerializer, NestedDonationSerializer
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.signals import user_logged_in
 from registration.signals import user_registered
-from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.http import Http404
-from rest_framework import mixins, exceptions, status, permissions, response, generics
+from rest_framework import exceptions, status, permissions, response, generics
 from django.utils.translation import ugettext as _
-from .mails import mail_voucher_redeemed, mail_custom_voucher_request
-from .models import Donation, OrderItem, Order, OrderStatuses, Voucher, CustomVoucherRequest, VoucherStatuses, \
-    DonationStatuses, RecurringDirectDebitPayment
+from .models import Donation, Order, OrderStatuses, DonationStatuses, RecurringDirectDebitPayment
 from .permissions import IsUser
-from .serializers import DonationSerializer, OrderSerializer, VoucherSerializer, VoucherDonationSerializer, \
-    VoucherRedeemSerializer, CustomVoucherRequestSerializer, RecurringDirectDebitPaymentSerializer, \
+from .serializers import DonationSerializer, OrderSerializer, RecurringDirectDebitPaymentSerializer, \
     OrderCurrentSerializer, OrderCurrentDonationSerializer
 
 
@@ -34,64 +31,6 @@ logger = logging.getLogger(__name__)
 anon_order_id_session_key = 'cart_order_id'
 
 no_active_order_error_msg = _(u"No active order")
-
-
-class OrderItemDestroyMixin(mixins.DestroyModelMixin):
-
-    def destroy(self, request, *args, **kwargs):
-        # Tidy up! Delete related OrderItem, if any.
-        obj = self.get_object()
-        ct = ContentType.objects.get_for_model(obj)
-        order_item = OrderItem.objects.filter(object_id=obj.id, content_type=ct)
-        if order_item:
-            order_item.delete()
-            obj.delete()
-            return response.Response(status=status.HTTP_204_NO_CONTENT)
-        return response.Response(status=status.HTTP_412_PRECONDITION_FAILED)
-
-
-class OrderItemMixin(mixins.CreateModelMixin):
-
-    def get_queryset(self):
-        # Filter queryset for the current order
-        alias = self.kwargs.get('alias', None)
-        order_id = self.kwargs.get('order_pk', None)
-
-        # Deal with the 'current' alias.
-        if alias == 'current':
-            order = self.get_current_order()
-        elif order_id:
-            try:
-                order = Order.objects.get(user=self.request.user, id=order_id)
-            except Order.DoesNotExist:
-                raise exceptions.ParseError(detail=_(u"Order not found."))
-        else:
-            raise exceptions.ParseError(detail=_(u"No order specified."))
-        if not order:
-            raise exceptions.ParseError(detail=_(u"Order not found."))
-        order_items = order.orderitem_set.filter(content_type=ContentType.objects.get_for_model(self.model))
-        queryset = self.model.objects.filter(id__in=order_items.values('object_id'))
-        return queryset
-
-    def create(self, request, *args, **kwargs):
-        """ Note; Only used with 'current' Order. """
-        order = self.get_current_order()
-        if not order:
-            raise exceptions.ParseError(detail=no_active_order_error_msg)
-        serializer = self.get_serializer(data=request.DATA, files=request.FILES)
-
-        if serializer.is_valid():
-            self.pre_save(serializer.object)
-            self.object = serializer.save(force_insert=True)
-            if request.user.is_authenticated():
-                setattr(self.object, self.user_field, request.user)
-            self.object.save()
-            OrderItem.objects.create(content_object=self.object, order=order)
-            self.post_save(self.object, created=True)
-
-            headers = self.get_success_headers(serializer.data)
-            return response.Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 #
@@ -128,25 +67,20 @@ class OrderDetail(generics.RetrieveUpdateAPIView):
         return order
 
 
-class NestedDonationList(OrderItemMixin, generics.ListCreateAPIView):
+class NestedDonationMixin(object):
     model = Donation
-    serializer_class = DonationSerializer
+    serializer_class = NestedDonationSerializer
     permission_classes = (IsUser,)
 
     def get_queryset(self):
+        qs = super(NestedDonationMixin, self).get_queryset()
+
         # First filter the default queryset by user.
-        qs = super(NestedDonationList, self).get_queryset().filter(user=self.request.user)
+        qs = qs.filter(user=self.request.user)
 
         # Second filter the queryset by the order.
-        # TODO put this in OrderItemMixin when 'current' Order goes away.
         order_id = self.kwargs.get('order_pk')
-        order = Order.objects.get(id=order_id)
-        order_items = order.orderitem_set.filter(content_type=ContentType.objects.get_for_model(self.model))
-        return self.model.objects.filter(id__in=order_items.values('object_id'))
-
-    # FIXME: Remove this override when 'current' Order goes away. create shouldn't be overridden, only pre and post save.
-    def create(self, request, *args, **kwargs):
-        return super(OrderItemMixin, self).create(request, *args, **kwargs)
+        return qs.filter(order_id=order_id)
 
     def pre_save(self, obj):
         # Don't allow donations to be added to closed orders. This check is here and not in the Serializer
@@ -159,20 +93,15 @@ class NestedDonationList(OrderItemMixin, generics.ListCreateAPIView):
         if self.request.user.is_authenticated():
             obj.user = self.request.user
 
-    def post_save(self, obj, created=False):
-        if created:
-            order_id = self.kwargs.get('order_pk')
-            orderitem = OrderItem.objects.create(content_object=self.object, order_id=order_id)
+        obj.order = order
 
 
-class NestedDonationDetail(OrderItemDestroyMixin, generics.RetrieveUpdateDestroyAPIView):
-    model = Donation
-    serializer_class = DonationSerializer
-    permission_classes = (IsUser,)
+class NestedDonationList(NestedDonationMixin, generics.ListCreateAPIView):
+    pass
 
-    def get_queryset(self):
-        qs = super(NestedDonationDetail, self).get_queryset()
-        return qs.filter(user=self.request.user)
+
+class NestedDonationDetail(NestedDonationMixin, generics.RetrieveUpdateDestroyAPIView):
+    pass
 
 
 class DonationList(generics.ListAPIView):
@@ -185,7 +114,7 @@ class DonationList(generics.ListAPIView):
         return qs.filter(user=self.request.user)
 
 
-class DonationDetail(OrderItemDestroyMixin, generics.RetrieveUpdateDestroyAPIView):
+class DonationDetail(generics.RetrieveUpdateDestroyAPIView):
     model = Donation
     serializer_class = DonationSerializer
     permission_classes = (IsUser,)
@@ -224,11 +153,9 @@ class RecurringDirectDebitPaymentMixin(object):
             monthly_order.recurring = True
             monthly_order.save()
 
-        ct = ContentType.objects.get_for_model(Donation)
-        for donation in current_order.donations:
-            order_item = OrderItem.objects.get(object_id=donation.id, content_type=ct)
-            order_item.order = monthly_order
-            order_item.save()
+        for donation in current_order.donations.all():
+            donation.order = monthly_order
+            donation.save()
 
 
 class RecurringDirectDebitPaymentList(RecurringDirectDebitPaymentMixin, generics.ListCreateAPIView):
@@ -312,6 +239,44 @@ class CurrentOrderMixin(object):
                     return None
             else:
                 return None
+
+    def get_queryset(self):
+        # Filter queryset for the current order
+        alias = self.kwargs.get('alias', None)
+        order_id = self.kwargs.get('order_pk', None)
+
+        # Deal with the 'current' alias.
+        if alias == 'current':
+            order = self.get_current_order()
+        elif order_id:
+            try:
+                order = Order.objects.get(user=self.request.user, id=order_id)
+            except Order.DoesNotExist:
+                raise exceptions.ParseError(detail=_(u"Order not found."))
+        else:
+            raise exceptions.ParseError(detail=_(u"No order specified."))
+        if not order:
+            raise exceptions.ParseError(detail=_(u"Order not found."))
+        queryset = self.model.objects.filter(order=order)
+        return queryset
+
+    def create(self, request, *args, **kwargs):
+        order = self.get_current_order()
+        if not order:
+            raise exceptions.ParseError(detail=no_active_order_error_msg)
+        serializer = self.get_serializer(data=request.DATA, files=request.FILES)
+
+        if serializer.is_valid():
+            if request.user.is_authenticated():
+                setattr(serializer.object, self.user_field, request.user)
+            serializer.object.order = order
+            self.pre_save(serializer.object)
+            self.object = serializer.save(force_insert=True)
+            self.post_save(self.object, created=True)
+
+            headers = self.get_success_headers(serializer.data)
+            return response.Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+        return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class OrderCurrentDetail(CurrentOrderMixin, generics.RetrieveUpdateAPIView):
@@ -454,14 +419,14 @@ class PaymentCurrent(CurrentOrderMixin, generics.RetrieveUpdateAPIView):
         return payment
 
 
-class OrderCurrentDonationList(OrderItemMixin, CurrentOrderMixin, generics.ListCreateAPIView):
+class OrderCurrentDonationList(CurrentOrderMixin, generics.ListCreateAPIView):
     model = Donation
     serializer_class = OrderCurrentDonationSerializer
     paginate_by = 50
     user_field = 'user'
 
 
-class OrderCurrentDonationDetail(OrderItemMixin, OrderItemDestroyMixin, CurrentOrderMixin, generics.RetrieveUpdateDestroyAPIView):
+class OrderCurrentDonationDetail(CurrentOrderMixin, generics.RetrieveUpdateDestroyAPIView):
     model = Donation
     serializer_class = OrderCurrentDonationSerializer
 
@@ -472,30 +437,34 @@ def adjust_anonymous_current_order(sender, request, user, **kwargs):
             anon_current_order = Order.objects.get(id=request.session.pop(anon_order_id_session_key))
             if anon_current_order.status == OrderStatuses.current:
 
-                # Anonymous order has status 'current' - copy over to user's 'current' order.
                 try:
                     user_current_order = Order.objects.get(user=user, status=OrderStatuses.current)
                     # Close old order by this user.
                     user_current_order.status = OrderStatuses.closed
                     user_current_order.save()
-                except Order.DoesNotExist:
-                    # There isn't a current order for the so we don't need to cancel it.
-                    pass
-                # Assign the anon order to this user.
-                anon_current_order.user = user
-                anon_current_order.save()
-                # Move all donations to this user too.
-                for donation in anon_current_order.donations:
-                    donation.user = user
-                    donation.save()
 
-            else:
-                # Anonymous cart order does not have status 'current' - just assign it to the user.
-                anon_current_order.user = user
-                anon_current_order.save()
-                for donation in anon_current_order.donations:
-                    donation.user = user
-                    donation.save()
+                    # Cancel the payments on the closed order.
+                    if user_current_order.payments.count() > 0:
+                        for payment in anon_current_order.payments.all():
+                            if payment.status != PaymentStatuses.new:
+                                try:
+                                    payments.cancel_payment(payment)
+                                except(NotImplementedError, PaymentException) as e:
+                                    logger.warn("Problem cancelling payment on closed user Order {0}: {1}".format(
+                                        user_current_order.id, e))
+
+                except Order.DoesNotExist:
+                    # There isn't a current order so we don't need to close it.
+                    pass
+
+            # Assign the anon order to this user.
+            anon_current_order.user = user
+            anon_current_order.save()
+            # Move all donations to this user too.
+            for donation in anon_current_order.donations.all():
+                donation.user = user
+                donation.save()
+
         except Order.DoesNotExist:
             pass
 
@@ -523,124 +492,14 @@ def link_anonymous_donations(sender, user, request, **kwargs):
 user_registered.connect(link_anonymous_donations)
 
 
-class OrderVoucherList(OrderItemMixin, CurrentOrderMixin, generics.ListCreateAPIView):
-    """
-    Resource for ordering Vouchers
-    """
-    model = Voucher
-    serializer_class = VoucherSerializer
-    permissions_classes = (permissions.IsAuthenticatedOrReadOnly,)
-    paginate_by = 50
-    user_field = 'sender'
-
-
-class OrderVoucherDetail(OrderItemMixin, OrderItemDestroyMixin, CurrentOrderMixin,generics.RetrieveUpdateDestroyAPIView):
-    """
-    Resource for changing a Voucher order
-    """
-    model = Voucher
-    serializer_class = VoucherSerializer
-
-
-class VoucherMixin(object):
-
-    def get_voucher(self):
-        """
-        Override default to have semantic error responses.
-        """
-        code = self.kwargs.get('code', None)
-        if not code:
-            raise exceptions.ParseError(detail=_(u"No gift card code supplied"))
-        try:
-            voucher = Voucher.objects.get(code=code.upper())
-        except Voucher.DoesNotExist:
-            raise exceptions.ParseError(detail=_(u"No gift card with that code"))
-        if voucher.status != VoucherStatuses.paid:
-            raise exceptions.PermissionDenied(detail=_(u"Gift card code already used"))
-        return voucher
-
-
-class VoucherDetail(VoucherMixin, generics.RetrieveUpdateAPIView):
-    """
-    Resource for Voucher redemption
-    """
-    model = Voucher
-    serializer_class = VoucherRedeemSerializer
-
-    def get_object(self, queryset=None):
-        voucher = self.get_voucher()
-        self.check_object_permissions(self.request, voucher)
-        return voucher
-
-    def pre_save(self, obj):
-        mail_voucher_redeemed(obj)
-        if self.request.user.is_authenticated():
-            obj.receiver = self.request.user
-        if obj.status == VoucherStatuses.cashed:
-            for donation in obj.donations.all():
-                donation.status = DonationStatuses.paid
-                donation.save()
-
-
-class VoucherDonationList(VoucherMixin, generics.ListCreateAPIView):
+# For showing the latest donations
+class TickerList(generics.ListAPIView):
     model = Donation
-    serializer_class = VoucherDonationSerializer
-
-    def pre_save(self, obj):
-        voucher = self.get_voucher()
-        # Clear previous donations for this voucher
-        for donation in voucher.donations.all():
-            donation.delete()
-        obj.amount = voucher.amount
-
-        """
-        Keep this code around for if we want to change to multiple donations for one voucher.
-
-        count = len(voucher.donations.all()) + 1
-        rest_amount = voucher.amount
-        part_amount = floor(voucher.amount / count)
-        for donation in voucher.donations.all():
-            rest_amount -= part_amount
-            donation.amount = part_amount
-            donation.save()
-
-        obj.amount = rest_amount
-        """
-
-        obj.save()
-        voucher.donations.add(obj)
+    serializer_class = DonationInfoSerializer
+    permission_classes = (permissions.IsAdminUser,)
+    paginate_by = 20
 
     def get_queryset(self):
-        voucher = self.get_voucher()
-        return voucher.donations.all()
-
-
-# Not used yet, until we want multiple donations per voucher
-class VoucherDonationDetail(VoucherMixin, generics.RetrieveDestroyAPIView):
-    model = Donation
-    serializer_class = VoucherDonationSerializer
-
-    def destroy(self, request, *args, **kwargs):
-        obj = self.get_object()
-        voucher = self.get_voucher()
-        count = len(voucher.donations.all()) - 1
-        if count:
-            part_amount = round(100 * voucher.amount / count) / 100
-            rest_amount = voucher.amount
-            for donation in voucher.donations.all():
-                rest_amount -= part_amount
-                donation.amount = part_amount
-                donation.save()
-            # FIXME There's a bug here - donation is not defined anymore.
-            donation.amount += rest_amount
-            donation.save()
-        obj.delete()
-        return response.Response(status=status.HTTP_204_NO_CONTENT)
-
-
-class CustomVoucherRequestList(generics.ListCreateAPIView):
-    model = CustomVoucherRequest
-    serializer_class = CustomVoucherRequestSerializer
-
-    def pre_save(self, obj):
-        mail_custom_voucher_request(obj)
+        qs = super(TickerList, self).get_queryset()
+        qs = qs.order_by('-created')
+        return qs.filter(status__in=[DonationStatuses.pending, DonationStatuses.paid])

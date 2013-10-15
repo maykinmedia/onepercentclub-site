@@ -2,13 +2,11 @@ from apps.cowry_docdata.models import DocDataPaymentOrder, payment_method_mappin
 from babel.numbers import format_currency
 from django.contrib import admin
 from django.core.urlresolvers import reverse
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.admin import SimpleListFilter
 from django.contrib.admin.templatetags.admin_static import static
 from django.utils import translation
 from django.utils.translation import ugettext_lazy as _
-from .models import Donation, Order, OrderItem, Voucher, CustomVoucherRequest, RecurringDirectDebitPayment, \
-    OrderStatuses, DonationStatuses
+from .models import Donation, Order, RecurringDirectDebitPayment, OrderStatuses, DonationStatuses
 
 
 # http://stackoverflow.com/a/16556771
@@ -45,19 +43,17 @@ payment_method_icon_mapping = {
 
 
 class DonationAdmin(admin.ModelAdmin):
-    date_hierarchy = 'created'
-    list_display = ('created', 'project', 'user', 'amount_override', 'status', 'type', 'payment_method_override')
+    date_hierarchy = 'updated'
+    list_display = ('updated', 'ready', 'project', 'user', 'amount_override', 'status', 'type', 'payment_method_override')
     list_filter = (DonationStatusFilter, 'donation_type')
+    ordering = ('-ready', '-updated')
     raw_id_fields = ('user', 'project')
-    readonly_fields = ('view_order',)
+    readonly_fields = ('view_order', 'created', 'updated', 'ready')
     fields = readonly_fields + ('status', 'donation_type', 'amount', 'currency', 'user', 'project')
-    search_fields = ('user__first_name', 'user__last_name', 'project__title')
+    search_fields = ('user__first_name', 'user__last_name', 'user__email', 'project__title')
 
     def view_order(self, obj):
-        donation_type = ContentType.objects.get_for_model(obj)
-        donation = OrderItem.objects.filter(object_id=obj.id).filter(content_type=donation_type).get()
-        order = donation.order
-        url = reverse('admin:%s_%s_change' % (order._meta.app_label, order._meta.module_name), args=[order.id])
+        url = reverse('admin:%s_%s_change' % (obj.order._meta.app_label, obj.order._meta.module_name), args=[obj.order.id])
         return "<a href='%s'>View Order</a>" % (str(url))
 
     view_order.allow_tags = True
@@ -90,13 +86,6 @@ class DonationAdmin(admin.ModelAdmin):
     payment_method_override.short_description = 'payment method'
 
 admin.site.register(Donation, DonationAdmin)
-
-
-class OrderItemInline(admin.TabularInline):
-    model = OrderItem
-    extra = 0
-    fields = ('type', 'content_object')
-    readonly_fields = fields
 
 
 class DocDataPaymentOrderInline(admin.TabularInline):
@@ -144,14 +133,29 @@ class OrderStatusFilter(SimpleListFilter):
             return queryset.filter(status=self.default_status)
 
 
+class DonationAdminInline(admin.TabularInline):
+    model = Donation
+    extra = 0
+    raw_id_fields = ('project',)
+    fields = ('project', 'status', 'amount', 'currency')
+
+
+# TODO Implement this when vouchers are added to the site.
+#class VoucherAdminInline(admin.TabularInline):
+#    model = Voucher
+#    extra = 0
+#    raw_id_fields = ('sender',)
+
+
 class OrderAdmin(admin.ModelAdmin):
+    date_hierarchy = 'updated'
     list_filter = (OrderStatusFilter, 'recurring')
-    list_display = ('order_number', 'user', 'created', 'updated', 'total', 'status', 'type')
+    list_display = ('order_number', 'user', 'updated', 'total', 'status', 'type')
     raw_id_fields = ('user',)
-    readonly_fields = ('type', 'total', 'order_number', 'created', 'updated')
-    fields = readonly_fields + ('user', 'status')
+    readonly_fields = ('total', 'order_number', 'created', 'updated')
+    fields = ('recurring',) + readonly_fields + ('user', 'status')
     search_fields = ('user__first_name', 'user__last_name', 'user__email', 'order_number')
-    inlines = (OrderItemInline, DocDataPaymentOrderInline,)
+    inlines = (DonationAdminInline, DocDataPaymentOrderInline,)
 
     def total(self, obj):
         language = translation.get_language().split('-')[0]
@@ -167,29 +171,6 @@ class OrderAdmin(admin.ModelAdmin):
     type.short_description = 'type'
 
 admin.site.register(Order, OrderAdmin)
-
-
-class VoucherAdmin(admin.ModelAdmin):
-    list_filter = ('status',)
-    list_display = ('created', 'amount_override', 'status', 'sender_email', 'receiver_email')
-    readonly_fields = ('sender', 'receiver', 'donations')
-    fields = readonly_fields + ('status', 'amount', 'currency', 'code', 'sender_email', 'receiver_email',
-                                'receiver_name', 'sender_name', 'message')
-
-    def amount_override(self, obj):
-        language = translation.get_language().split('-')[0]
-        return format_currency(obj.amount / 100.0, obj.currency, locale=language)
-
-    amount_override.short_description = 'amount'
-
-admin.site.register(Voucher, VoucherAdmin)
-
-
-class CustomVoucherRequestAdmin(admin.ModelAdmin):
-    list_filter = ('status', 'organization')
-    list_display = ('created', 'number', 'status', 'contact_name', 'contact_email', 'organization')
-
-admin.site.register(CustomVoucherRequest, CustomVoucherRequestAdmin)
 
 
 # http://stackoverflow.com/a/16556771

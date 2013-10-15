@@ -2,12 +2,11 @@ import logging
 import random
 from babel.numbers import format_currency
 from django.conf import settings
-from django.contrib.contenttypes.generic import GenericForeignKey
-from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from django.utils import translation
+from django.utils import timezone
 from django.utils.translation import ugettext as _
 from django_extensions.db.fields import ModificationDateTimeField, CreationDateTimeField
 from django_iban.fields import IBANField, SWIFTBICField
@@ -16,7 +15,6 @@ from bluebottle.accounts.models import BlueBottleUser
 from apps.cowry.models import PaymentStatuses, Payment
 from apps.cowry.signals import payment_status_changed
 from .fields import DutchBankAccountField
-from .mails import mail_new_voucher
 
 logger = logging.getLogger(__name__)
 random.seed()
@@ -31,9 +29,11 @@ class RecurringDirectDebitPayment(models.Model):
     created = CreationDateTimeField(_("Created"))
     updated = ModificationDateTimeField(_("Updated"))
 
+    manually_process = models.BooleanField(default=False, help_text="Whether or not to process the monthly donation manually instead of with the automatic script.")
+
     # The amount in the minor unit for the given currency (e.g. for EUR in cents).
     amount = models.PositiveIntegerField(_("amount"), default=0)
-    currency = models.CharField(max_length=3, default='')
+    currency = models.CharField(max_length=3, default='EUR')
 
     # Bank account.
     name = models.CharField(max_length=35)  # max_length from DocData
@@ -46,11 +46,17 @@ class RecurringDirectDebitPayment(models.Model):
     bic = SWIFTBICField(blank=True, default='')
 
     def __unicode__(self):
+        active_status = 'inactive'
         if self.active:
-            postfix = ' - active'
-        else:
-            postfix = ' - inactive'
-        return str(self.user) + ' ' + str(self.amount) + postfix
+            active_status = 'active'
+
+        language = translation.get_language().split('-')[0]
+        if not language:
+            language = 'en'
+
+        return u'{0} - {1} - {2}'.format(str(self.user),
+                                         format_currency(self.amount / 100.0, self.currency, locale=language),
+                                         active_status)
 
 
 @receiver(post_save, weak=False, sender=BlueBottleUser)
@@ -82,8 +88,7 @@ class DonationStatuses(DjangoChoices):
 
 class Donation(models.Model):
     """
-    Donation of an amount from a user to a project. A Donation can have a generic foreign key from OrderItem when
-    it's used in the order process but it can also be used without this GFK when it's used to cash in a Voucher.
+    Donation of an amount from a user to a project.
     """
     class DonationTypes(DjangoChoices):
         one_off = ChoiceItem('one_off', label=_("One-off"))
@@ -91,28 +96,36 @@ class Donation(models.Model):
         voucher = ChoiceItem('voucher', label=_("Voucher"))
 
     amount = models.PositiveIntegerField(_("Amount"))
-    currency = models.CharField(_("currency"), max_length=3)
+    currency = models.CharField(_("currency"), max_length=3, default='EUR')
 
+    # User is just a cache of the order user.
     user = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name=_("User"), null=True, blank=True)
     project = models.ForeignKey('projects.Project', verbose_name=_("Project"))
 
     status = models.CharField(_("Status"), max_length=20, choices=DonationStatuses.choices, default=DonationStatuses.new, db_index=True)
+
     created = CreationDateTimeField(_("Created"))
     updated = ModificationDateTimeField(_("Updated"))
+    # The timestamp the donation changed to pending or paid. This is auto-set in the save() method.
+    ready = models.DateTimeField(_("Ready"), blank=True, editable=False, null=True)
 
     donation_type = models.CharField(_("Type"), max_length=20, choices=DonationTypes.choices, default=DonationTypes.one_off, db_index=True)
+
+    order = models.ForeignKey('Order', verbose_name=_("Order"), related_name='donations')
 
     @property
     def payment_method(self):
         """ The DocData payment method. """
-        ctype = ContentType.objects.get_for_model(Donation)
-        order_item = OrderItem.objects.get(object_id=self.id, content_type=ctype)
-        latest_payment = order_item.order.latest_payment
+        latest_payment = self.order.latest_payment
         if latest_payment:
             if getattr(latest_payment, 'docdata_payments', False):
                 latest_docdata_payment = latest_payment.latest_docdata_payment
                 if latest_docdata_payment:
                     return latest_docdata_payment.payment_method
+
+        if self.donation_type == self.DonationTypes.voucher:
+            return _("Gift Card")
+
         return ''
 
     class Meta:
@@ -123,8 +136,27 @@ class Donation(models.Model):
         language = translation.get_language().split('-')[0]
         if not language:
             language = 'en'
-        return u'{0} : {1} : {2}'.format(str(self.id), self.project.title,
+        return u'{0} - {1} - {2}'.format(str(self.id), self.project.title,
                                          format_currency(self.amount / 100.0, self.currency, locale=language))
+
+    def save(self, *args, **kwargs):
+        # Automatically set the user and donation_type based on the order. This is required so that donations always
+        # have the correct user and donation_type regardless of how they are created. User is just a cache of the order
+        # user.
+        if self.order.user != self.user:
+            self.user = self.order.user
+        if self.order.recurring and self.donation_type != self.DonationTypes.recurring:
+            self.donation_type = self.DonationTypes.recurring
+        elif not self.order.recurring and self.donation_type != self.DonationTypes.one_off:
+            self.donation_type = self.DonationTypes.one_off
+
+        # Set the datetime when the Donation became 'ready'. This is used for the donation time on the frontend.
+        if not self.ready and self.status in (DonationStatuses.pending, DonationStatuses.paid):
+            self.ready = timezone.now()
+        elif self.ready and self.status not in (DonationStatuses.pending, DonationStatuses.paid):
+            self.ready = None
+
+        super(Donation, self).save(*args, **kwargs)
 
 
 class OrderStatuses(DjangoChoices):
@@ -135,7 +167,7 @@ class OrderStatuses(DjangoChoices):
 
 class Order(models.Model):
     """
-    Order holds OrderItems (Donations/Vouchers).
+    An order is a collection of Donations and vouchers with a connected payment.
     """
     user = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name=_("user"), blank=True, null=True)
     status = models.CharField(_("Status"), max_length=20, choices=OrderStatuses.choices, default=OrderStatuses.current, db_index=True)
@@ -155,25 +187,11 @@ class Order(models.Model):
     def total(self):
         """ Calculated total for this Order. """
         total = 0
-        for item in self.orderitem_set.all():
-            total += item.amount
+        for voucher in self.vouchers.all():
+            total += voucher.amount
+        for donation in self.donations.all():
+            total += donation.amount
         return total
-
-    @property
-    def total_euro(self):
-        return "%01.2f" % (self.total / 100)
-
-    @property
-    def donations(self):
-        content_type = ContentType.objects.get_for_model(Donation)
-        order_items = self.orderitem_set.filter(content_type=content_type)
-        return Donation.objects.filter(id__in=order_items.values('object_id'))
-
-    @property
-    def vouchers(self):
-        content_type = ContentType.objects.get_for_model(Voucher)
-        order_items = self.orderitem_set.filter(content_type=content_type)
-        return Voucher.objects.filter(id__in=order_items.values('object_id'))
 
     def __unicode__(self):
         description = ''
@@ -181,17 +199,20 @@ class Order(models.Model):
             description += self.order_number + " - "
 
         description += "1%Club "
+
+        donations = self.donations.count()
+        vouchers = self.vouchers.count()
         if self.recurring:
             # TODO Use English / Dutch based on user primary_language.
             description += "MAANDELIJKSE DONATIE"
-        elif not self.donations and self.vouchers:
-            if len(self.donations) > 1:
+        elif donations == 0 and vouchers > 0:
+            if vouchers > 1:
                 description += _("GIFTCARDS")
             else:
                 description += _("GIFTCARD")
             description += str(self.id)
-        elif self.donations and not self.vouchers:
-            if len(self.donations) > 1:
+        elif donations > 0 and vouchers == 0:
+            if donations > 1:
                 description += _("DONATIONS")
             else:
                 description += _("DONATION")
@@ -201,7 +222,7 @@ class Order(models.Model):
         return description
 
     class Meta:
-        ordering = ('-created',)
+        ordering = ('-updated',)
 
     # http://stackoverflow.com/questions/2076838
     def save(self, *args, **kwargs):
@@ -219,111 +240,6 @@ class Order(models.Model):
         super(Order, self).save(*args, **kwargs)
 
 
-class OrderItem(models.Model):
-    """
-    This connects a Donation or a Voucher to an Order. It's generic so that Donations don't have to know about Orders
-    and so that we can add more Order types easily.
-    """
-    order = models.ForeignKey(Order)
-    content_type = models.ForeignKey(ContentType)
-    object_id = models.PositiveIntegerField()
-    content_object = GenericForeignKey('content_type', 'object_id')
-
-    # Calculate properties for ease of use (e.g. in serializers).
-    @property
-    def amount(self):
-        if self.content_object:
-            return self.content_object.amount
-        return 0
-
-    @property
-    def type(self):
-        return self.content_object.__class__.__name__
-
-
-class VoucherStatuses(DjangoChoices):
-    new = ChoiceItem('new', label=_("New"))
-    paid = ChoiceItem('paid', label=_("Paid"))
-    cancelled = ChoiceItem('cancelled', label=_("Cancelled"))
-    cashed = ChoiceItem('cashed', label=_("Cashed"))
-    cashed_by_proxy = ChoiceItem('cashed_by_proxy', label=_("Cashed by us"))
-
-
-class Voucher(models.Model):
-
-    class VoucherLanguages(DjangoChoices):
-        en = ChoiceItem('en', label=_("English"))
-        nl = ChoiceItem('nl', label=_("Dutch"))
-
-    amount = models.PositiveIntegerField(_("Amount"))
-    currency = models.CharField(_("Currency"), blank=True, max_length=3)
-
-    language = models.CharField(_("Language"), max_length=2, choices=VoucherLanguages.choices, default=VoucherLanguages.en)
-    message = models.TextField(_("Message"), blank=True, default="", max_length=500)
-    code = models.CharField(_("Code"), blank=True, default="", max_length=100)
-
-    status = models.CharField(_("Status"), max_length=20, choices=VoucherStatuses.choices, default=VoucherStatuses.new, db_index=True)
-    created = CreationDateTimeField(_("Created"))
-    updated = ModificationDateTimeField(_("Updated"))
-
-    sender = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name=_("Sender"), related_name="sender", null=True, blank=True)
-    sender_email = models.EmailField(_("Sender email"))
-    sender_name = models.CharField(_("Sender name"), blank=True, default="", max_length=100)
-
-    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name=_("Receiver"), related_name="receiver", null=True, blank=True)
-    receiver_email = models.EmailField(_("Receiver email"))
-    receiver_name = models.CharField(_("Receiver name"), blank=True, default="", max_length=100)
-
-    donations = models.ManyToManyField('Donation')
-
-    class Meta:
-        # Note: This can go back to 'Voucher' when we figure out a proper way to do EN -> EN translations for branding.
-        verbose_name = _("Gift Card")
-        verbose_name_plural = _("Gift Cards")
-
-
-class CustomVoucherRequest(models.Model):
-
-    class CustomVoucherTypes(DjangoChoices):
-        card = ChoiceItem('card', label=_("Card"))
-        digital = ChoiceItem('digital', label=_("Digital"))
-        unknown = ChoiceItem('unknown', label=_("Unknown"))
-
-    class CustomVoucherStatuses(DjangoChoices):
-        new = ChoiceItem('new', label=_("New"))
-        in_progress = ChoiceItem('in progress', label=_("In progress"))
-        finished = ChoiceItem('finished', label=_("Finished"))
-
-    value = models.CharField(verbose_name=_("Value"), max_length=100, blank=True, default="")
-    number = models.PositiveIntegerField(_("Number"))
-    contact = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name=_("Contact member"), null=True)
-    contact_name = models.CharField(verbose_name=_("Contact email"), max_length=100, blank=True, default="")
-    contact_email = models.EmailField(verbose_name=_("Contact email"), blank=True, default="")
-    contact_phone = models.CharField(verbose_name=_("Contact phone"), max_length=100, blank=True, default="")
-    organization = models.CharField(verbose_name=_("Organisation"), max_length=200, blank=True, default="")
-    message = models.TextField(_("message"), default="", max_length=500, blank=True)
-
-    type = models.CharField(_("type"), max_length=20, choices=CustomVoucherTypes.choices, default=CustomVoucherTypes.unknown)
-    status = models.CharField(_("status"), max_length=20, choices=CustomVoucherStatuses.choices, default=CustomVoucherStatuses.new, db_index=True)
-    created = CreationDateTimeField(_("created"))
-
-
-def process_voucher_order_in_progress(voucher):
-    def generate_voucher_code():
-        # Upper case letters without D, O, L and I; Numbers without 0 and 1.
-        char_set = 'ABCEFGHJKMNPQRSTUVWXYZ23456789'
-        return ''.join(random.choice(char_set) for i in range(8))
-
-    code = generate_voucher_code()
-    while Voucher.objects.filter(code=code).exists():
-        code = generate_voucher_code()
-
-    voucher.code = code
-    voucher.status = VoucherStatuses.paid
-    voucher.save()
-    mail_new_voucher(voucher)
-
-
 @receiver(payment_status_changed, sender=Payment)
 def process_payment_status_changed(sender, instance, old_status, new_status, **kwargs):
     # Payment statuses: new
@@ -332,6 +248,7 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
     #                   paid
     #                   failed
     #                   cancelled
+    #                   chargedback
     #                   refunded
     #                   unknown
 
@@ -342,13 +259,14 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
     #
     if old_status == PaymentStatuses.new and new_status == PaymentStatuses.in_progress:
         # Donations.
-        for donation in order.donations:
+        for donation in order.donations.all():
             donation.status = DonationStatuses.in_progress
             donation.save()
 
         # Vouchers.
-        for voucher in order.vouchers:
-            process_voucher_order_in_progress(voucher)
+        # TODO Implement vouchers.
+        #for voucher in order.vouchers.all():
+        #    process_voucher_order_in_progress(voucher)
 
     #
     # Payment: -> cancelled; Order is 'current'
@@ -356,7 +274,7 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
     if new_status == PaymentStatuses.cancelled and order.status == OrderStatuses.current:
 
         # Donations.
-        for donation in order.donations:
+        for donation in order.donations.all():
             donation.status = DonationStatuses.new
             donation.save()
 
@@ -394,7 +312,7 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
             order.save()
 
         # Donations.
-        for donation in order.donations:
+        for donation in order.donations.all():
             donation.status = DonationStatuses.pending
             donation.save()
 
@@ -410,7 +328,7 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
             order.save()
 
         # Donations.
-        for donation in order.donations:
+        for donation in order.donations.all():
             donation.status = DonationStatuses.paid
             donation.save()
 
@@ -426,11 +344,12 @@ def process_payment_status_changed(sender, instance, old_status, new_status, **k
             order.save()
 
         # Donations.
-        for donation in order.donations:
+        for donation in order.donations.all():
             donation.status = DonationStatuses.failed
             donation.save()
 
         # Vouchers.
-        for voucher in order.vouchers:
-            voucher.status = VoucherStatuses.cancelled
-            voucher.save()
+        # TODO Implement vouchers.
+        #for voucher in order.vouchers.all():
+        #    voucher.status = VoucherStatuses.cancelled
+        #    voucher.save()
