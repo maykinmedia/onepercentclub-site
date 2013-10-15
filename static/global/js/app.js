@@ -441,10 +441,8 @@ App.SlugRouter = Em.Mixin.create({
 });
 
 App.Router.reopen({
-    location: 'hashbang'
-});
+    location: 'hashbang',
 
-App.Router.reopen({
     /**
      * Tracks pageviews if google analytics is used
      * Source: http://www.randomshouting.com/2013/05/04/Ember-and-Google-Analytics.html
@@ -458,6 +456,27 @@ App.Router.reopen({
         });
     }
 });
+
+/**
+ * Updating the meta-data based on the route.
+ */
+App.Router.reopen({
+    didTransition: function(infos) {
+        this._super(infos);
+        Ember.run.next(function() {
+            // the meta module will now go trough the routes and look for data
+            App.meta.trigger('reloadDataFromRoutes');
+        });
+    }
+});
+
+
+DS.Model.reopen({
+    page_title: DS.attr('string'),
+    page_description: DS.attr('string'),
+    page_keywords: DS.attr('string'),
+});
+
 
 App.Router.map(function() {
 
@@ -729,6 +748,20 @@ App.ApplicationRoute = Em.Route.extend({
 /**
  * Project Routes
  */
+
+Em.Route.reopen({
+    metaTitle: function(){
+        return this.get('context.page_title');
+    }.property('context.page_title'),
+
+    metaDescription: function(){
+        return this.get('context.page_description');
+    }.property('context.page_description'),
+
+    metaKeywords: function(){
+        return this.get('context.page_keywords');
+    }.property('context.page_keywords')
+});
 
 App.ProjectRoute = Em.Route.extend({
     model: function(params) {
