@@ -275,6 +275,26 @@ DS.Model.reopen({
     page_keywords: DS.attr('string'),
 });
 
+
+Em.Route.reopen({
+    metaTitle: function(){
+        return this.get('context.page_title');
+    }.property('context.page_title'),
+
+    metaDescription: function(){
+        return this.get('context.page_description');
+    }.property('context.page_description'),
+
+    metaKeywords: function(){
+        return this.get('context.page_keywords');
+    }.property('context.page_keywords'),
+
+    metaImage: function(){
+        return this.get('context.page_image');
+    }.property('context.page_image')
+});
+
+
 App.ApplicationRoute = Em.Route.extend({
 
 //    setupController: function(controller, model) {
