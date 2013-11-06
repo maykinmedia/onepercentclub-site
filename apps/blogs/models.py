@@ -14,6 +14,7 @@ from taggit_autocomplete_modified.managers import TaggableManagerAutocomplete as
 
 
 from bluebottle.bluebottle_utils.serializers import MLStripper
+from bluebottle.bluebottle_utils.utils import clean_for_hashtag
 from bluebottle.geo.models import Country
 
 
@@ -127,6 +128,15 @@ class BlogPost(models.Model):
                 return (item.url, True)
         return None
 
+    def get_tweet(self, **kwargs):
+        request = kwargs.get('request')
+        lang_code = request.LANGUAGE_CODE
+        twitter_handle = settings.TWITTER_HANDLES.get(lang_code, settings.DEFAULT_TWITTER_HANDLE)
+
+        tweet = _(u"{title} {{URL}} via {twitter_handle}"
+                    ).format(title=self.title, twitter_handle=twitter_handle)
+
+        return tweet
 
 
 # The proxy models are only here to have a separation in the Django admin interface.

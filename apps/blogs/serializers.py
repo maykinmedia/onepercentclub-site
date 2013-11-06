@@ -27,6 +27,7 @@ class BlogPostSerializer(serializers.ModelSerializer):
     meta_data = MetaField(
         description = 'get_meta_description',
         image_source = 'get_first_image',
+        tweet = 'get_tweet',
         )
 
     class Meta:
