@@ -7,6 +7,7 @@ from django.utils.translation import ugettext_lazy as _
 from django_extensions.db.fields import CreationDateTimeField, ModificationDateTimeField
 from djchoices import DjangoChoices, ChoiceItem
 from fluent_contents.models import PlaceholderField
+from fluent_contents.plugins.oembeditem.models import OEmbedItem
 from fluent_contents.rendering import render_placeholder
 from sorl.thumbnail import ImageField
 from taggit_autocomplete_modified.managers import TaggableManagerAutocomplete as TaggableManager
@@ -16,7 +17,13 @@ from bluebottle.bluebottle_utils.serializers import MLStripper
 from bluebottle.geo.models import Country
 
 
+from bluebottle.contentplugins.models import PictureItem
+
+
 from .managers import BlogPostManager, BlogPostProxyManager
+
+
+import re
 
 
 class BlogCategory(models.Model):
@@ -85,6 +92,41 @@ class BlogPost(models.Model):
         s = MLStripper()
         s.feed(render_placeholder(request, self.contents))
         return truncatechars(s.get_data(), 250)
+
+    def get_first_image(self, **kwargs):
+        """
+        For the facebook meta-data, the first image is required.
+
+        Get all the content items and filter out those that are pictures.
+        Return the url of the first picture.
+        """
+        relevant_items = [item for item in self.contents.get_content_items() \
+                    if (isinstance(item, PictureItem) or isinstance(item, OEmbedItem))]
+        
+        item = relevant_items.pop(0)
+        if isinstance(item, PictureItem):
+            # we're sure we are dealing with a picture, so just return the image url
+            request = kwargs.get('request')
+            location = item.image.url
+            absolute_uri = request.build_absolute_uri(location)
+            return (absolute_uri, True)
+
+        else:
+            # it's an OEmbedItem. check if's an image suitable for facebook OG
+            # https://developers.facebook.com/docs/web/tutorials/scrumptious/open-graph-object/
+            # Only JPEG, PNG, GIF and BMP images are supported
+            # TODO: a generic utils function for this kind of stuff would be nice ;)
+            regex = re.compile(r'http(s?)://.*/.*\.(png|jpg|jpeg|jpe|jfif|jif|jfi|gif|bmp|dib)', re.IGNORECASE)
+            match = re.match(regex, item.url)
+            while relevant_items and not match:
+                item = relevant_items.pop(0)
+                match = re.match(regex, item.url)
+            
+            if match:
+                # huray, we found a suitable image!
+                return (item.url, True)
+        return None
+
 
 
 # The proxy models are only here to have a separation in the Django admin interface.
