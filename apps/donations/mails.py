@@ -52,6 +52,6 @@ def mail_new_oneoff_donation(donation):
         to=donation.project.owner,
 
         amount=(donation.amount / 100.0),
-        donor_name=donation.user.first_name or _('Unknown user'),
+        donor_name=donation.user.first_name if donation.user and donation.user.first_name else _('Unknown user'),
         link='/go/projects/{0}'.format(donation.project.slug),
     )
