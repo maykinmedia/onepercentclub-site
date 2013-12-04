@@ -33,6 +33,12 @@ class PayoutAdmin(admin.ModelAdmin):
                                 'receiver_account_country', 'invoice_reference', 'description_line1',
                                 'description_line2', 'description_line3', 'description_line4']
 
+    search_fields = [
+        'project__title',
+        'project__partner_organization__name',
+        'invoice_reference',
+    ]
+
 
     def organization(self, obj):
         object = obj.project.projectplan.organization
