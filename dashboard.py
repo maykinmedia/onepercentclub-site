@@ -25,4 +25,9 @@ class CustomIndexDashboard(FluentIndexDashboard):
                 'url': reverse('admin-accounting-overview'),
                 'external': False
             },
+           {
+                'title': _('Finance dashboard'),
+                'url': reverse('admin-accounting-dashboard'),
+                'external': False
+            },
         ]))
