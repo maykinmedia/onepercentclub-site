@@ -74,8 +74,8 @@ class AccountingOverviewView(FormView):
 
             statistics.update({
                 'orders': {
-                    'total_amount': order_payments_aggregated['amount__sum'],
-                    'transaction_fee': order_payments_aggregated['transaction_fee__sum'],
+                    'total_amount': order_payments_aggregated['amount__sum'] or 0,
+                    'transaction_fee': order_payments_aggregated['transaction_fee__sum'] or 0,
                     'count': order_payments.count(),
                 },
                 # 'donations': {
@@ -85,13 +85,13 @@ class AccountingOverviewView(FormView):
                 'bank': [],
                 'docdata': {
                     'payment': {
-                        'total_amount': remote_docdata_payments_aggregated['amount_collected__sum'],
-                        'docdata_fee': remote_docdata_payments_aggregated['docdata_fee__sum'],
-                        'third_party': remote_docdata_payments_aggregated['tpci__sum'],
+                        'total_amount': remote_docdata_payments_aggregated['amount_collected__sum'] or 0,
+                        'docdata_fee': remote_docdata_payments_aggregated['docdata_fee__sum'] or 0,
+                        'third_party': remote_docdata_payments_aggregated['tpci__sum'] or 0,
                         'count': remote_docdata_payments.count()
                     },
                     'payout': {
-                        'total_amount': remote_docdata_payouts_aggregated['payout_amount__sum'],
+                        'total_amount': remote_docdata_payouts_aggregated['payout_amount__sum'] or 0,
                         'count': remote_docdata_payouts.count()
                     },
                 },
@@ -102,9 +102,9 @@ class AccountingOverviewView(FormView):
                         organization_fee=Sum('organization_fee'),
                         count=Count('payout_rule'),
                     ),
-                    'raised': project_payouts_aggregated['amount_raised__sum'],
-                    'payable': project_payouts_aggregated['amount_payable__sum'],
-                    'organization_fee': project_payouts_aggregated['organization_fee__sum'],
+                    'raised': project_payouts_aggregated['amount_raised__sum'] or 0,
+                    'payable': project_payouts_aggregated['amount_payable__sum'] or 0,
+                    'organization_fee': project_payouts_aggregated['organization_fee__sum'] or 0,
                     'count': project_payouts.count()
                 },
             })
