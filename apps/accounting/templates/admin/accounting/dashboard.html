@@ -240,21 +240,22 @@
                 <thead>
                     <tr>
                         <th>{% trans "Bank account" %}</th>
+                        <th>{% trans "IBAN" %}</th>
                         <th>{% trans "Last transaction" %}</th>
                         <th>{% trans "Balance" %}</th>
                     </tr>
                 </thead>
                 <tbody>
+                    {% for bank_account_name, bank_account_nr in bank_accounts %}
+                    {% if bank_account_name %}
                     <tr>
-                        <td>...</td>
+                        <td>{{ bank_account_name }}</td>
+                        <td>{{ bank_account_nr }}</th>
                         <td>...</td>
                         <td class="financial">...</td>
                     </tr>
-                    <tr>
-                        <td>...</td>
-                        <td>...</td>
-                        <td class="financial">...</td>
-                    </tr>
+                    {% endif %}
+                    {% endfor %}
                 </tbody>
             </table>
         </div>

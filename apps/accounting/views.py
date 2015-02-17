@@ -14,6 +14,7 @@ from apps.accounting.models import BankTransaction, RemoteDocdataPayment, Remote
 from apps.payouts.models import ProjectPayout
 
 from .utils import get_accounting_statistics, get_dashboard_values
+from .enum import BANK_ACCOUNTS
 
 class PeriodForm(forms.Form):
     start = forms.DateField()
@@ -99,6 +100,7 @@ class AccountingDashboardView(FormView):
              'statistics': statistics,
              'data': data,
              'start': self.selected_start,
-             'stop': self.selected_stop
+             'stop': self.selected_stop,
+             'bank_accounts': BANK_ACCOUNTS
         })
         return context
