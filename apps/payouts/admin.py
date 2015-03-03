@@ -6,6 +6,7 @@ from django.utils import timezone
 from bluebottle.bb_payouts.admin import ProjectPayoutAdmin, OrganizationPayoutAdmin
 from bluebottle.utils.model_dispatcher import get_project_payout_model, get_organization_payout_model
 from django.contrib.admin.sites import NotRegistered
+from django.core.urlresolvers import reverse
 
 import logging
 from bluebottle.utils.admin import export_as_csv_action
@@ -47,7 +48,7 @@ admin.site.register(ORGANIZATION_PAYOUT_MODEL, OnePercentOrganizationPayoutAdmin
 class OnePercentProjectPayoutAdmin(ProjectPayoutAdmin):
 
     list_display = ['payout', 'status', 'admin_project', 'amount_raised', 'organization_fee',
-                    'amount_payable', 'rule', 'admin_has_iban',
+                    'admin_amount_payable', 'rule', 'admin_has_iban',
                     'admin_account_details',
                     'created_date', 'submitted_date', 'completed_date',
                     'action', 'project_on_website']
@@ -67,11 +68,15 @@ class OnePercentProjectPayoutAdmin(ProjectPayoutAdmin):
     def admin_account_details(self, obj):
         org = obj.project.organization
         if org:
+            link_to_org = reverse('admin:organizations_organization_change', args=(org.pk,))
+
             if not org.account_iban:
-                return u"Bank: {0} - {1}<br />Acc holder: {2}".format(
+                descr = u"Bank: {0} - {1}<br />Acc holder: {2}".format(
                     org.account_bank_name, org.account_bic,
                     org.account_holder_name)
-            return org.account_iban
+            else:
+                descr =  org.account_iban
+            return u"<a href={}>{}</a>".format(link_to_org, descr)
         return None
     admin_account_details.short_description = "Account details"
     admin_account_details.allow_tags = True
@@ -81,6 +86,12 @@ class OnePercentProjectPayoutAdmin(ProjectPayoutAdmin):
             return u"<a href='#TODO'>Compensate</a>"
         return u""
     action.allow_tags = True
+
+    def admin_amount_payable(self, obj):
+        filter = '?project={}'.format(obj.project.pk) if obj.project else ''
+        link = reverse('admin:donations_donation_changelist') + filter
+        return u"<a href='{}'>{}</a>".format(link, obj.amount_payable)
+    admin_amount_payable.allow_tags = True
 
     def export_sepa(self, request, queryset):
         """
