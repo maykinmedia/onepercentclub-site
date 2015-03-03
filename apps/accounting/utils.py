@@ -53,6 +53,10 @@ def get_dashboard_values(start, stop):
     data['project_payouts_pending_amount'] = data['project_payouts_pending'].aggregate(Sum('amount_raised'))['amount_raised__sum'] or 0
     data['project_payouts_settled'] = data['project_payouts'].filter(status='settled')
     data['project_payouts_settled_amount'] = data['project_payouts_settled'].aggregate(Sum('amount_raised'))['amount_raised__sum'] or 0
+    data['project_payouts_pending_new'] = data['project_payouts'].filter(status='new')
+    data['project_payouts_pending_new_amount'] = data['project_payouts_pending_new'].aggregate(Sum('amount_raised'))['amount_raised__sum'] or 0
+    data['project_payouts_pending_in_progress'] = data['project_payouts'].filter(status='in_progress')
+    data['project_payouts_pending_in_progress_amount'] = data['project_payouts_pending_in_progress'].aggregate(Sum('amount_raised'))['amount_raised__sum'] or 0
     data['donations_amount'] = data['donations'].aggregate(Sum('amount'))['amount__sum'] or 0
     data['donations_settled'] = data['donations'].filter(order__status='success')
     data['donations_settled_amount'] = data['donations_settled'].aggregate(Sum('amount'))['amount__sum'] or 0

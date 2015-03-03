@@ -125,11 +125,20 @@
                                 amount: {{ data.donations_failed_amount|numberformat }}
                             </a>
                     </td></tr>
-                    <tr><td><a href="{% url 'admin:payouts_projectpayout_changelist' %}">
-                                {{ data.project_payouts_pending.count }} {% trans "pending project payouts" %} -
-                                amount: {{ data.project_payouts_pending_amount|numberformat }}
+                    {% if request.user.is_superuser %}
+                        <tr><td><a href="{% url 'admin:payouts_projectpayout_changelist' %}?status__exact=in_progress">
+                            {{ data.project_payouts_pending_in_progress.count }} {% trans "pending project payouts" %} -
+                            amount: {{ data.project_payouts_pending_in_progress_amount|numberformat }}
+                        </a>
+                        </td></tr>
+                    {% elif request.user.is_staff %}
+                        <tr><td><a href="{% url 'admin:payouts_projectpayout_changelist' %}?status__exact=new">
+                            {{ data.project_payouts_pending_new.count }} {% trans "pending project payouts" %} -
+                                amount: {{ data.project_payouts_pending_new_amount|numberformat }}
                             </a>
-                    </td></tr>
+                        </td></tr>
+                    {% endif %}
+
                 </tbody>
             </table>
 
